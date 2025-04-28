@@ -27,7 +27,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npx standard-version
-          git push --follow-tags origin release
+          git push --follow-tags origin main
       - name: Install & Build & Test
         run: |
           yarn
