@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.2.0](https://github.com/c-rick/jimeng-mcp/compare/v1.1.0...v1.2.0) (2025-05-07)
+
+
+### Features
+
+* update api with session ([54127a3](https://github.com/c-rick/jimeng-mcp/commit/54127a3290d8908f3e2edbd570411bc48594c760))
+
 ## 1.1.0 (2025-04-28)
 
 
