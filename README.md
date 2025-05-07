@@ -1,6 +1,8 @@
 # Jimeng MCP 服务器
 
+
 使用TypeScript实现的Model Context Protocol (MCP) 服务器项目，集成了即梦AI图像生成服务，通过逆向工程直接调用即梦官方API。
+
 
 ## 功能
 
@@ -13,6 +15,15 @@
 
 ## 安装
 
+### 通过Smithery安装
+
+要通过 [Smithery](https://smithery.ai/server/@c-rick/jimeng-mcp) 自动为Claude Desktop安装jimeng-mcp，请执行以下命令：
+
+```bash
+npx -y @smithery/cli install @c-rick/jimeng-mcp --client claude
+```
+
+### 手动安装
 ```bash
 # 使用yarn安装依赖
 yarn install
