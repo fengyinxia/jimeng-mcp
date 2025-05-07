@@ -13,13 +13,9 @@ process.on('unhandledRejection', (reason, promise) => {
 // 启动服务器
 const main = async () => {
   try {
-    // required: VOLCENGINE_ACCESS_KEY
-    // required: VOLCENGINE_SECRET_KEY
-    if (!process.env.VOLCENGINE_ACCESS_KEY) {
-      throw new Error('VOLCENGINE_ACCESS_KEY is required!')
-    }
-    if (!process.env.VOLCENGINE_SECRET_KEY) {
-      throw new Error('VOLCENGINE_SECRET_KEY is required!')
+    // required: JIMENG_API_TOKEN
+    if (!process.env.JIMENG_API_TOKEN) {
+      throw new Error('JIMENG_API_TOKEN is required!')
     }
 
     await startServer();
