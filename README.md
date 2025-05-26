@@ -12,6 +12,7 @@
 - 直接调用即梦AI图像生成服务，无需第三方API
 - 提供多种即梦模型的图像生成工具
 - 支持多种图像参数调整，如尺寸、精细度、负面提示词等
+- 支持图片混合/参考图生成（通过filePath参数，支持本地图片和网络图片）
 
 ## 安装
 
@@ -110,11 +111,48 @@ yarn test
 `generateImage` - 提交图像生成请求并返回图像URL列表
 - 参数：
   - `prompt`：生成图像的文本描述（必填）
-  - `model`：模型名称，可选值: jimeng-3.0, jimeng-2.1, jimeng-2.0-pro, jimeng-2.0, jimeng-1.4, jimeng-xl-pro（可选，默认为jimeng-2.1）
+  - `filePath`：本地图片路径或图片URL（可选，若填写则为图片混合/参考图生成功能）
+  - `model`：模型名称，可选值: jimeng-3.0, jimeng-2.1, jimeng-2.0-pro, jimeng-2.0, jimeng-1.4, jimeng-xl-pro（可选，默认为jimeng-2.1，图片混合时自动切换为jimeng-2.0-pro）
   - `width`：图像宽度，默认值：1024（可选）
   - `height`：图像高度，默认值：1024（可选）
   - `sample_strength`：精细度，默认值：0.5，范围0-1（可选）
   - `negative_prompt`：反向提示词，告诉模型不要生成什么内容（可选）
+
+> **注意：**
+> - `filePath` 支持本地绝对/相对路径和图片URL。
+> - 若指定 `filePath`，将自动进入图片混合/参考图生成模式，底层模型自动切换为 `jimeng-2.0-pro`。
+> - 网络图片需保证可公开访问。
+
+### 图片混合/参考图生成功能
+
+如需基于图片进行混合生成，只需传入`filePath`参数（支持本地路径或图片URL），即可实现图片风格融合、参考图生成等高级玩法。
+
+#### 示例：
+
+```javascript
+// 参考图片混合生成
+client.callTool({
+  name: "generateImage",
+  arguments: {
+    prompt: "梵高风格的猫",
+    filePath: "./test.png", // 本地图片路径
+    sample_strength: 0.6
+  }
+});
+```
+
+或
+
+```javascript
+// 使用网络图片作为参考
+client.callTool({
+  name: "generateImage",
+  arguments: {
+    prompt: "未来城市",
+    filePath: "https://example.com/your-image.png"
+  }
+});
+```
 
 ### 支持的模型
 
@@ -134,13 +172,15 @@ yarn test
 - 支持积分自动领取和使用
 - 基于面向对象设计，将API实现封装为类
 - 返回高质量图像URL列表
+- 支持图片上传，自动处理本地/网络图片，自动切换混合模型
+- 图片混合时自动上传图片到即梦云端，流程全自动
 
 ### 使用示例
 
 通过MCP协议调用图像生成功能：
 
 ```javascript
-// 生成图像
+// 生成图像（文本生成）
 client.callTool({
   name: "generateImage",
   arguments: {
@@ -150,6 +190,15 @@ client.callTool({
     height: 1024,
     sample_strength: 0.7,
     negative_prompt: "模糊，扭曲，低质量"
+  }
+});
+
+// 生成图像（图片混合/参考图生成）
+client.callTool({
+  name: "generateImage",
+  arguments: {
+    prompt: "未来城市",
+    filePath: "https://example.com/your-image.png"
   }
 });
 ```
@@ -192,6 +241,8 @@ API将返回生成的图像URL数组，可以直接在各类客户端中显示�
    - 检查JIMENG_API_TOKEN是否正确配置
    - 登录即梦官网检查账号积分是否充足
    - 尝试更换提示词，避免敏感内容
+   - 若为图片混合，检查filePath路径/URL是否有效、图片是否可访问
+   - 网络图片建议使用https直链，避免防盗链/权限问题
 
 2. **服务器无法启动**
    - 确保已安装所有依赖
