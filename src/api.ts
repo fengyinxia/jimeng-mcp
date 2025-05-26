@@ -1,6 +1,10 @@
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
+import path from 'path';
+import fs from 'fs';
+// @ts-ignore
+import crc32 from 'crc32';
 
 
 // 模型映射
@@ -33,6 +37,7 @@ const unixTimestamp = () => {
 
 // 常量定义
 const DEFAULT_MODEL = 'jimeng-2.1';
+const DEFAULT_BLEND_MODEL = 'jimeng-2.0-pro';
 const DRAFT_VERSION = '3.0.2';
 const DEFAULT_ASSISTANT_ID = '513695'; // 从原始仓库中提取
 const WEB_ID = Math.random() * 999999999999999999 + 7000000000000000000;
@@ -48,6 +53,7 @@ interface LogoInfo {
 }
 
 interface ImageGenerationParams {
+  filePath?: string; // 图片路径
   model?: string; // 模型名称，默认使用 DEFAULT_MODEL
   prompt: string; // 提示词
   width?: number; // 图像宽度，默认1024
@@ -77,6 +83,7 @@ export function generateCookie(refreshToken: string) {
 // 即梦API客户端类
 class JimengApiClient {
   private refreshToken: string;
+  private getUploadImageProofUrl = 'https://imagex.bytedanceapi.com/'
 
   constructor() {
     this.refreshToken = process.env.JIMENG_API_TOKEN || '';
@@ -111,7 +118,7 @@ class JimengApiClient {
     headers: any = {}
   ): Promise<any> {
     const baseUrl = 'https://jimeng.jianying.com';
-    const url = `${baseUrl}${path}`;
+    const url = path.includes('https://') ? path : `${baseUrl}${path}`;
     const FAKE_HEADERS = {
       Accept: "application/json, text/plain, */*",
       "Accept-Encoding": "gzip, deflate, br, zstd",
@@ -209,9 +216,13 @@ class JimengApiClient {
     if (!params.prompt || typeof params.prompt !== 'string') {
       throw new Error('prompt必须是非空字符串');
     }
-
+    const hasFilePath = params?.filePath
+    let uploadID = null
+    if (params?.filePath) {
+      uploadID = await this.uploadCoverFile(params.filePath)
+    }
     // 获取实际模型
-    const modelName = params.model || DEFAULT_MODEL;
+    const modelName = hasFilePath ? DEFAULT_BLEND_MODEL : params.model || DEFAULT_MODEL;
     const actualModel = this.getModel(modelName);
 
     // 检查积分
@@ -225,14 +236,109 @@ class JimengApiClient {
     const rqParams = {
       "babi_param": urlEncode(jsonEncode({
         "scenario": "image_video_generation",
-        "feature_key": "aigc_to_image",
+        "feature_key": hasFilePath ? "to_image_referenceimage_generate" : "aigc_to_image",
         "feature_entrance": "to_image",
-        "feature_entrance_detail": `to_image-${actualModel}`,
+        "feature_entrance_detail": hasFilePath ? "to_image-referenceimage-byte_edit" : `to_image-${actualModel}`,
       })),
       "aid": parseInt(DEFAULT_ASSISTANT_ID),
       "device_platform": "web",
       "region": "CN",
       "web_id": WEB_ID
+    }
+
+    let abilities: Record<string, any> = {}
+    if (hasFilePath) {
+      abilities = {
+        "blend": {
+          "type": "",
+          "id": generateUuid(),
+          "min_features": [],
+          "core_param": {
+            "type": "",
+            "id": generateUuid(),
+            "model": actualModel,
+            "prompt": params.prompt + '##',
+            "sample_strength": params.sample_strength || 0.5,
+            "image_ratio": 1,
+            "large_image_info": {
+              "type": "",
+              "id": generateUuid(),
+              "height": 1360,
+              "width": 1360,
+              "resolution_type": '1k'
+            }
+          },
+          "ability_list": [
+            {
+              "type": "",
+              "id": generateUuid(),
+              "name": "byte_edit",
+              "image_uri_list": [
+                uploadID
+              ],
+              "image_list": [
+                {
+                  "type": "image",
+                  "id": generateUuid(),
+                  "source_from": "upload",
+                  "platform_type": 1,
+                  "name": "",
+                  "image_uri": uploadID,
+                  "width": 0,
+                  "height": 0,
+                  "format": "",
+                  "uri": uploadID
+                }
+              ],
+              "strength": 0.5
+            }
+          ],
+          "history_option": {
+            "type": "",
+            "id": generateUuid(),
+          },
+          "prompt_placeholder_info_list": [
+            {
+              "type": "",
+              "id": generateUuid(),
+              "ability_index": 0
+            }
+          ],
+          "postedit_param": {
+            "type": "",
+            "id": generateUuid(),
+            "generate_type": 0
+          }
+        }
+      }
+    } else {
+      abilities = {
+        "generate": {
+          "type": "",
+          "id": generateUuid(),
+          "core_param": {
+            "type": "",
+            "id": generateUuid(),
+            "model": actualModel,
+            "prompt": params.prompt,
+            "negative_prompt": params.negative_prompt || "",
+            "seed": Math.floor(Math.random() * 100000000) + 2500000000,
+            "sample_strength": params.sample_strength || 0.5,
+            "image_ratio": 1,
+            "large_image_info": {
+              "type": "",
+              "id": generateUuid(),
+              "height": params.height || 1024,
+              "width": params.width || 1024,
+              "resolution_type": '1k'
+            }
+          },
+          "history_option": {
+            "type": "",
+            "id": generateUuid(),
+          }
+        }
+      }
     }
     const rqData = {
       "extend": {
@@ -240,7 +346,7 @@ class JimengApiClient {
         "template_id": "",
       },
       "submit_id": generateUuid(),
-      "metrics_extra": jsonEncode({
+      "metrics_extra": hasFilePath ? undefined : jsonEncode({
         "templateId": "",
         "generateCount": 1,
         "promptSource": "custom",
@@ -253,48 +359,31 @@ class JimengApiClient {
         "id": generateUuid(),
         "min_version": DRAFT_VERSION,
         "is_from_tsn": true,
-        "version": "3.2.0",
+        "version": "3.2.2",
         "main_component_id": componentId,
         "component_list": [{
           "type": "image_base_component",
           "id": componentId,
           "min_version": DRAFT_VERSION,
-          "generate_type": "generate",
+          "metadata": {
+            "type": "",
+            "id": generateUuid(),
+            "created_platform": 3,
+            "created_platform_version": "",
+            "created_time_in_ms": Date.now(),
+            "created_did": ""
+          },
+          "generate_type": hasFilePath ? "blend" : "generate",
           "aigc_mode": "workbench",
           "abilities": {
             "type": "",
             "id": generateUuid(),
-            "generate": {
-              "type": "",
-              "id": generateUuid(),
-              "core_param": {
-                "type": "",
-                "id": generateUuid(),
-                "model": actualModel,
-                "prompt": params.prompt,
-                "negative_prompt": params.negative_prompt || "",
-                "seed": Math.floor(Math.random() * 100000000) + 2500000000,
-                "sample_strength": params.sample_strength || 0.5,
-                "image_ratio": 1,
-                "large_image_info": {
-                  "type": "",
-                  "id": generateUuid(),
-                  "height": params.height || 1024,
-                  "width": params.width || 1024,
-                  "resolution_type": '1k'
-                }
-              },
-              "history_option": {
-                "type": "",
-                "id": generateUuid(),
-              }
-            }
+            ...abilities
           }
         }]
       }),
     }
 
-    // console.log(rqData, rqParams, 'result');
     // 发送生成请求
     const result = await this.request(
       'POST',
@@ -369,10 +458,430 @@ class JimengApiClient {
       return imageUrl;
     }).filter(Boolean);
   }
+  /**
+  * 获取上传凭证所需Ak和Tk
+  */
+  private async getUploadAuth(): Promise<any> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const authRes = await this.request(
+          'POST',
+          '/mweb/v1/get_upload_token?aid=513695&da_version=3.2.2&aigc_features=app_lip_sync',
+          {
+            scene: 2
+          },
+          {},
+        );
+        if (
+          !authRes.data
+        ) {
+          reject(authRes.errmsg ?? '获取上传凭证失败,账号可能已掉线!');
+          return;
+        }
+        resolve(authRes.data);
+      } catch (err) {
+        console.error('获取上传凭证失败:', err);
+        reject(err);
+      }
+    });
+  }
+
+  public async getFileContent(filePath: string): Promise<Buffer> {
+    try {
+      if (filePath.includes('https://') || filePath.includes('http://')) {
+        const res = await this.request(
+          'GET',
+          filePath,
+          {},
+          {},
+        );
+        return res.data;
+      } else {
+        // 确保路径是绝对路径
+        const absolutePath = path.resolve(filePath);
+
+        // 读取文件内容
+        return await fs.promises.readFile(absolutePath);
+      }
+    } catch (error) {
+      console.error('Failed to read file:', error);
+      throw new Error(`读取文件失败: filePath`);
+    }
+  }
+
+  private generateRandomString(length: number): string {
+    let result = '';
+    const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const charactersLength = characters.length;
+    for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return result;
+  }
+
+  /**
+  * 生成请求所需Header
+  */
+  private addHeaders(
+    amzDate: string,
+    sessionToken: string,
+    requestBody: any,
+  ): any {
+    const headers = {
+      'X-Amz-Date': amzDate,
+      'X-Amz-Security-Token': sessionToken,
+    };
+    if (Object.keys(requestBody).length > 0) {
+      // @ts-ignore
+      headers['X-Amz-Content-Sha256'] = crypto
+        .createHash('sha256')
+        .update(JSON.stringify(requestBody))
+        .digest('hex');
+    }
+    return headers;
+  }
+
+  /**
+   * 生成请求所需Header
+   */
+  private async generateAuthorizationAndHeader(
+    accessKeyID: string,
+    secretAccessKey: string,
+    sessionToken: string,
+    region: string,
+    service: string,
+    requestMethod: string,
+    requestParams: any,
+    requestBody: any = {},
+  ): Promise<any> {
+    return new Promise((resolve) => {
+      // 获取当前ISO时间
+      const now = new Date();
+      const amzDate = now.toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0, 15) + 'Z';
+
+      // 生成请求的Header
+      const requestHeaders: Record<string, string> = this.addHeaders(
+        amzDate,
+        sessionToken,
+        requestBody,
+      )
+
+      if (Object.keys(requestBody).length > 0) {
+        // @ts-ignore
+        requestHeaders['X-Amz-Content-Sha256'] = crypto
+          .createHash('sha256')
+          .update(JSON.stringify(requestBody))
+          .digest('hex')
+      }
+      // 生成请求的Authorization
+      const authorizationParams = [
+        'AWS4-HMAC-SHA256 Credential=' + accessKeyID + '/' +
+        this.credentialString(amzDate, region, service),
+        'SignedHeaders=' + this.signedHeaders(requestHeaders),
+        'Signature=' + this.signature(
+          secretAccessKey,
+          amzDate,
+          region,
+          service,
+          requestMethod,
+          requestParams,
+          requestHeaders,
+          requestBody,
+        ),
+      ];
+      const authorization = authorizationParams.join(', ');
+
+      // 返回Headers
+      const headers: any = {};
+      for (const key in requestHeaders) {
+        headers[key] = requestHeaders[key];
+      }
+      headers['Authorization'] = authorization;
+      resolve(headers);
+    });
+  }
+
+  /**
+   * 获取credentialString
+   */
+  private credentialString(
+    amzDate: string,
+    region: string,
+    service: string,
+  ): string {
+    const credentialArr = [
+      amzDate.substring(0, 8),
+      region,
+      service,
+      'aws4_request',
+    ];
+    return credentialArr.join('/');
+  }
+
+  /**
+   * 生成http请求参数字符串
+   */
+  private httpBuildQuery(params: any): string {
+    const searchParams = new URLSearchParams();
+    for (const key in params) {
+      if (params?.hasOwnProperty(key)) {
+        searchParams.append(key, params[key]);
+      }
+    }
+    return searchParams.toString();
+  }
+
+  private signedHeaders(requestHeaders: any): string {
+    const headers: string[] = [];
+    Object.keys(requestHeaders).forEach(function (r) {
+      r = r.toLowerCase();
+      headers.push(r);
+    });
+    return headers.sort().join(';');
+  }
+
+
+  /**
+   * 生成canonicalString
+   */
+  private canonicalString(
+    requestMethod: string,
+    requestParams: any,
+    requestHeaders: any,
+    requestBody: any,
+  ): string {
+    let canonicalHeaders: string[] = [];
+    const headerKeys = Object.keys(requestHeaders).sort();
+    for (let i = 0; i < headerKeys.length; i++) {
+      canonicalHeaders.push(
+        headerKeys[i].toLowerCase() + ':' + requestHeaders[headerKeys[i]],
+      );
+    }
+    // @ts-ignore
+    canonicalHeaders = canonicalHeaders.join('\n') + '\n';
+    let body = '';
+    if (Object.keys(requestBody).length > 0) {
+      body = JSON.stringify(requestBody);
+    }
+
+    const canonicalStringArr = [
+      requestMethod.toUpperCase(),
+      '/',
+      this.httpBuildQuery(requestParams),
+      canonicalHeaders,
+      this.signedHeaders(requestHeaders),
+      crypto.createHash('sha256').update(body).digest('hex'),
+    ];
+    return canonicalStringArr.join('\n');
+  }
+
+  private signature(
+    secretAccessKey: string,
+    amzDate: string,
+    region: string,
+    service: string,
+    requestMethod: string,
+    requestParams: any,
+    requestHeaders: any,
+    requestBody: any,
+  ): string {
+    // 生成signingKey
+    const amzDay = amzDate.substring(0, 8);
+    const kDate = crypto
+      .createHmac('sha256', 'AWS4' + secretAccessKey)
+      .update(amzDay)
+      .digest();
+    const kRegion = crypto.createHmac('sha256', kDate).update(region).digest();
+    const kService = crypto
+      .createHmac('sha256', kRegion)
+      .update(service)
+      .digest();
+    const signingKey = crypto
+      .createHmac('sha256', kService)
+      .update('aws4_request')
+      .digest();
+
+    // 生成StringToSign
+    const stringToSignArr = [
+      'AWS4-HMAC-SHA256',
+      amzDate,
+      this.credentialString(amzDate, region, service),
+      crypto
+        .createHash('sha256')
+        .update(
+          this.canonicalString(
+            requestMethod,
+            requestParams,
+            requestHeaders,
+            requestBody,
+          ),
+        )
+        .digest('hex'),
+    ];
+    const stringToSign = stringToSignArr.join('\n');
+    return crypto
+      .createHmac('sha256', signingKey)
+      .update(stringToSign)
+      .digest('hex');
+  }
+
+  /**
+   * 上传文件到远程服务器
+   * @param url 上传地址
+   * @param fileContent 文件内容
+   * @param headers 请求头
+   * @param method HTTP 方法
+   * @param proxy
+   */
+  private async uploadFile(
+    url: string,
+    fileContent: Buffer,
+    headers: any,
+    method: string = 'PUT',
+  ): Promise<any> {
+    return new Promise(async (resolve, reject) => {
+      const res = await this.request(
+        'POST',
+        url,
+        fileContent,
+        {},
+        headers
+      );
+      resolve(res);
+    });
+  }
+
+  /**
+   * 上传文件
+   */
+  private async uploadCoverFile(
+    filePath: string,
+  ): Promise<string> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        // 获取上传令牌所需Ak和Tk
+        const uploadAuth = await this.getUploadAuth();
+
+        // 获取图片数据
+        const imageRes = await this.getFileContent(filePath);
+        // 获取图片Crc32标识
+        const imageCrc32 = crc32(imageRes).toString(16);
+        // 获取图片上传凭证签名所需参数
+        const getUploadImageProofRequestParams = {
+          Action: 'ApplyImageUpload',
+          FileSize: imageRes.length,
+          ServiceId: 'tb4s082cfz',
+          Version: '2018-08-01',
+          s: this.generateRandomString(11),
+        };
+
+        // 获取图片上传请求头
+        const requestHeadersInfo = await this.generateAuthorizationAndHeader(
+          uploadAuth.access_key_id,
+          uploadAuth.secret_access_key,
+          uploadAuth.session_token,
+          'cn-north-1',
+          'imagex',
+          'GET',
+          getUploadImageProofRequestParams,
+        );
+
+
+        // 获取图片上传凭证
+        const uploadImgRes = await this.request(
+          'GET',
+          this.getUploadImageProofUrl + '?' +
+          this.httpBuildQuery(getUploadImageProofRequestParams),
+          {},
+          {},
+          requestHeadersInfo
+        );
+
+        if (uploadImgRes?.['Response  ']?.hasOwnProperty('Error')) {
+          reject(uploadImgRes['Response ']['Error']['Message']);
+          return;
+        }
+
+        const UploadAddress = uploadImgRes.Result.UploadAddress;
+        // 用凭证拼接上传图片接口
+        const uploadImgUrl = `https://${UploadAddress.UploadHosts[0]}/upload/v1/${UploadAddress.StoreInfos[0].StoreUri}`;
+
+        // 上传图片
+        const imageUploadRes = await this.uploadFile(
+          uploadImgUrl,
+          imageRes,
+          {
+            Authorization: UploadAddress.StoreInfos[0].Auth,
+            'Content-Crc32': imageCrc32,
+            'Content-Type': 'application/octet-stream',
+            // 'X-Storage-U': '3674996648187204',
+          },
+          'POST',
+        );
+
+
+        if (imageUploadRes.code !== 2000) {
+          reject(imageUploadRes.message);
+          return;
+        }
+
+        const commitImgParams = {
+          Action: 'CommitImageUpload',
+          FileSize: imageRes.length,
+          ServiceId: 'tb4s082cfz',
+          Version: '2018-08-01',
+          // user_id: userUid,
+        };
+
+        const commitImgContent = {
+          SessionKey: UploadAddress.SessionKey,
+        };
+
+        const commitImgHead = await this.generateAuthorizationAndHeader(
+          uploadAuth.access_key_id,
+          uploadAuth.secret_access_key,
+          uploadAuth.session_token,
+          'cn-north-1',
+          'imagex',
+          'POST',
+          commitImgParams,
+          commitImgContent,
+        );
+
+        // 提交图片上传
+        const commitImg = await this.request(
+          'POST',
+          this.getUploadImageProofUrl +
+          '?' +
+          this.httpBuildQuery(commitImgParams),
+          commitImgContent,
+          {},
+          {
+            ...commitImgHead,
+            'Content-Type': 'application/json',
+          }
+        );
+
+        if (commitImg['Response ']?.hasOwnProperty('Error')) {
+          reject(commitImg['Response  ']['Error']['Message']);
+          return;
+        }
+
+
+        resolve(commitImg.Result.Results[0].Uri);
+      } catch (err: any) {
+        console.error('上传文件失败:', err);
+        const errorMessage = err?.message || err || '未知';
+        reject('上传失败,失败原因:' + errorMessage);
+      }
+    });
+  }
+
 }
 
 // 创建API客户端实例
 const apiClient = new JimengApiClient();
+
 
 // 导出函数，保持对外接口不变
 export const generateImage = (params: ImageGenerationParams): Promise<string[]> => {
