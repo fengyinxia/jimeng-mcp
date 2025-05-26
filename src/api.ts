@@ -489,17 +489,12 @@ class JimengApiClient {
   public async getFileContent(filePath: string): Promise<Buffer> {
     try {
       if (filePath.includes('https://') || filePath.includes('http://')) {
-        const res = await this.request(
-          'GET',
-          filePath,
-          {},
-          {},
-        );
-        return res.data;
+        // 直接用axios获取图片Buffer
+        const res = await axios.get(filePath, { responseType: 'arraybuffer' });
+        return Buffer.from(res.data);
       } else {
         // 确保路径是绝对路径
         const absolutePath = path.resolve(filePath);
-
         // 读取文件内容
         return await fs.promises.readFile(absolutePath);
       }
