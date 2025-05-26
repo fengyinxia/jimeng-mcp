@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.4.0](https://github.com/c-rick/jimeng-mcp/compare/v1.3.0...v1.4.0) (2025-05-26)
+
+
+### Features
+
+* support blend ([0e59e3d](https://github.com/c-rick/jimeng-mcp/commit/0e59e3db543bdcceb91d6f80769d3ad6c6d54433))
+* update readme ([e9a1b31](https://github.com/c-rick/jimeng-mcp/commit/e9a1b31a478bae812c9316c2f7e70363f6d30b4b))
+
 ## [1.3.0](https://github.com/c-rick/jimeng-mcp/compare/v1.2.1...v1.3.0) (2025-05-07)
 
 
