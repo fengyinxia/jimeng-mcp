@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.6.0](https://github.com/c-rick/jimeng-mcp/compare/v1.5.1...v1.6.0) (2025-05-26)
+
+
+### Features
+
+* update response type ([624dbfe](https://github.com/c-rick/jimeng-mcp/commit/624dbfe4658c975f13c145d739f72e5e28bca049))
+
 ### [1.5.1](https://github.com/c-rick/jimeng-mcp/compare/v1.5.0...v1.5.1) (2025-05-26)
 
 
