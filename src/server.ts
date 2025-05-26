@@ -57,32 +57,22 @@ export const createServer = (): McpServer => {
           };
         }
 
-        // 定义正确的类型
-        type ContentItem = { type: "resource"; resource: { uri: string; blob: string; mimeType: string } }
 
         // 将返回的图像URL转换为MCP响应格式
-        const responseContent: ContentItem[] = []
+        const responseContent: { type: "text", text: string }[] = []
 
         if (typeof imageUrls === 'string') {
           // 单个URL的情况
           responseContent.push({
-            type: "resource",
-            resource: {
-              uri: imageUrls,
-              blob: '',
-              mimeType: ''
-            }
+            type: "text",
+            text: imageUrls
           });
         } else if (Array.isArray(imageUrls)) {
           // URL数组的情况
           for (const url of imageUrls) {
             responseContent.push({
-              type: "resource",
-              resource: {
-                uri: url,
-                mimeType: '',
-                blob: ''
-              }
+              type: "text",
+              text: url
             });
           }
         }
