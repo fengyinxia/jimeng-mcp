@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.5.0](https://github.com/c-rick/jimeng-mcp/compare/v1.4.0...v1.5.0) (2025-05-26)
+
+
+### Features
+
+* update server ([f3de05c](https://github.com/c-rick/jimeng-mcp/commit/f3de05c439d833d642a1e71d604227bbc3aa725a))
+
 ## [1.4.0](https://github.com/c-rick/jimeng-mcp/compare/v1.3.0...v1.4.0) (2025-05-26)
 
 
