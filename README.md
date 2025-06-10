@@ -37,16 +37,23 @@ npm install
 
 在MCP客户端配置（如Claude Desktop）中设置以下环境变量：
 
+进入[Smithery托管项目](https://smithery.ai/server/@c-rick/jimeng-mcp)，点击json, 填入JIMENG_API_TOKEN， 点击connect, 生成下面mcpServers config json
+
 ```json
 {
   "mcpServers": {
-    "jimeng": {
-      "command": "node",
-      "args": ["lib/index.js"],
-      "cwd": "/path/to/jimeng-mcp",
-      "env": {
-        "JIMENG_API_TOKEN": "your_jimeng_session_id_here"
-      }
+    "jimeng-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@c-rick/jimeng-mcp",
+        "--key",
+        "[Smithery生成]",
+        "--profile",
+        "[Smithery生成]"
+      ]
     }
   }
 }
