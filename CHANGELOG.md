@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.7.0](https://github.com/c-rick/jimeng-mcp/compare/v1.6.1...v1.7.0) (2025-07-08)
+
+
+### Features
+
+* 支持使用3.1模型（默认），混合生图默认使用3.0模型 ([2f52a6f](https://github.com/c-rick/jimeng-mcp/commit/2f52a6fc009509ec5db2fc402db800aa934a7b31))
+
 ### [1.6.1](https://github.com/c-rick/jimeng-mcp/compare/v1.6.0...v1.6.1) (2025-06-10)
 
 ## [1.6.0](https://github.com/c-rick/jimeng-mcp/compare/v1.5.1...v1.6.0) (2025-05-26)
