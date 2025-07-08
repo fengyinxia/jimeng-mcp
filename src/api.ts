@@ -9,6 +9,7 @@ import crc32 from 'crc32';
 
 // 模型映射
 const MODEL_MAP: Record<string, string> = {
+  'jimeng-3.1': 'high_aes_general_v30l_art_fangzhou:general_v3.0_18b',
   'jimeng-3.0': 'high_aes_general_v30l:general_v3.0_18b',
   'jimeng-2.1': 'high_aes_general_v21_L:general_v2.1_L',
   'jimeng-2.0-pro': 'high_aes_general_v20_L:general_v2.0_L',
@@ -36,8 +37,8 @@ const unixTimestamp = () => {
 
 
 // 常量定义
-const DEFAULT_MODEL = 'jimeng-2.1';
-const DEFAULT_BLEND_MODEL = 'jimeng-2.0-pro';
+const DEFAULT_MODEL = 'jimeng-3.1';
+const DEFAULT_BLEND_MODEL = 'jimeng-3.0';
 const DRAFT_VERSION = '3.0.2';
 const DEFAULT_ASSISTANT_ID = '513695'; // 从原始仓库中提取
 const WEB_ID = Math.random() * 999999999999999999 + 7000000000000000000;
@@ -224,7 +225,6 @@ class JimengApiClient {
     // 获取实际模型
     const modelName = hasFilePath ? DEFAULT_BLEND_MODEL : params.model || DEFAULT_MODEL;
     const actualModel = this.getModel(modelName);
-
     // 检查积分
     const creditInfo = await this.getCredit();
     if (creditInfo.totalCredit <= 0) {
@@ -394,7 +394,11 @@ class JimengApiClient {
     // 获取历史记录ID
     const historyId = result?.data?.aigc_data?.history_record_id;
     if (!historyId) {
-      throw new Error('记录ID不存在');
+      if (result?.errmsg) {
+        throw new Error(result.errmsg);
+      } else {
+        throw new Error('记录ID不存在');
+      }
     }
 
     // 轮询获取结果
