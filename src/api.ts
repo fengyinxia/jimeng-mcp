@@ -154,7 +154,8 @@ class JimengApiClient {
         url,
         data: method.toUpperCase() !== 'GET' ? data : undefined,
         params: method.toUpperCase() === 'GET' ? { ...data, ...params } : params,
-        headers: requestHeaders
+        headers: requestHeaders,
+        timeout: 60000
       });
 
 
