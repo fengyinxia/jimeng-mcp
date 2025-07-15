@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.8.0](https://github.com/c-rick/jimeng-mcp/compare/v1.7.1...v1.8.0) (2025-07-15)
+
+
+### Features
+
+* add script to start api server ([e5ad5f2](https://github.com/c-rick/jimeng-mcp/commit/e5ad5f2652598e29491b9dce6c803b568440d899))
+
 ### [1.7.1](https://github.com/c-rick/jimeng-mcp/compare/v1.7.0...v1.7.1) (2025-07-11)
 
 ## [1.7.0](https://github.com/c-rick/jimeng-mcp/compare/v1.6.1...v1.7.0) (2025-07-08)
