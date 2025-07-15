@@ -29,13 +29,16 @@
     "start": "node -r dotenv/config lib/index.js",
     "start:dev": "nodemon -r dotenv/config lib/index.js",
     "type-check": "tsc --noEmit",
-    "test": "npx @modelcontextprotocol/inspector node -r dotenv/config ./lib/index.js"
+    "test": "npx @modelcontextprotocol/inspector node -r dotenv/config ./lib/index.js",
+    "start:api": "dotenv -e .env --  tsx ./script/start"
   },
   "devDependencies": {
     "@types/node": "^22.15.2",
     "@types/uuid": "^10.0.0",
+    "dotenv-cli": "^8.0.0",
     "nodemon": "^3.1.10",
     "tsup": "^8.4.0",
+    "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   },
   "dependencies": {
@@ -47,6 +50,7 @@
     "crypto": "1.0.1",
     "crypto-js": "4.2.0",
     "dotenv": "^16.5.0",
+    "express": "^5.1.0",
     "uuid": "^11.1.0",
     "zod": "^3.24.3"
   }
