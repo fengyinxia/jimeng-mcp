@@ -13,6 +13,7 @@
 - 提供多种即梦模型的图像生成工具
 - 支持多种图像参数调整，如尺寸、精细度、负面提示词等
 - 支持图片混合/参考图生成（通过filePath参数，支持本地图片和网络图片）
+- 支持视频生成，支持添加参考图片（首尾帧通过filePath参数设置）
 
 ## 安装
 
@@ -165,12 +166,19 @@ client.callTool({
 
 服务器支持以下即梦AI模型：
 
+- 图片模型
+- `jimeng-3.1`：即梦第三代模型，丰富的美学多样性，画面更鲜明生动 （默认）
 - `jimeng-3.0`：即梦第三代模型，效果更好，支持更强的图像生成能力
 - `jimeng-2.1`：即梦2.1版本模型，默认模型
 - `jimeng-2.0-pro`：即梦2.0 Pro版本
 - `jimeng-2.0`：即梦2.0标准版本
 - `jimeng-1.4`：即梦1.4版本
 - `jimeng-xl-pro`：即梦XL Pro特殊版本
+- 视频模型
+- `jimeng-video-3.0-pro`：即梦视频3.0 Pro模型，适合高质量视频生成
+- `jimeng-video-3.0`：即梦视频3.0标准模型，主力视频生成模型（默认）
+- `jimeng-video-2.0-pro`：即梦视频2.0 Pro模型，兼容性好，适合多场景
+- `jimeng-video-2.0`：即梦视频2.0标准模型，适合基础视频生成
 
 ### 技术实现
 
@@ -259,3 +267,74 @@ API将返回生成的图像URL数组，可以直接在各类客户端中显示�
 ## 许可证
 
 MIT 
+
+## 即梦AI视频生成
+
+本MCP服务器集成了即梦AI视频生成API，提供视频生成工具：
+
+`generateVideo` - 提交视频生成请求并返回视频URL
+- 参数：
+  - `prompt`：生成视频的文本描述（必填）
+  - `filePath`：首帧和尾帧图片路径，支持数组，最多2个元素，分别为首帧和尾帧（可选）
+  - `model`：模型名称，默认jimeng-video-3.0（可选）
+  - `resolution`：分辨率，可选720p或1080p，默认720p（可选）
+  - `width`：视频宽度，默认值：1024（可选）
+  - `height`：视频高度，默认值：1024（可选）
+  - `refresh_token`：即梦API令牌（可选，通常从环境变量读取）
+  - `req_key`：自定义参数，兼容旧接口（可选）
+
+> **注意：**
+> - `filePath` 支持本地绝对/相对路径和图片URL。
+> - 若指定 `filePath`，可实现首帧/尾帧定制的视频生成。
+> - 网络图片需保证可公开访问。
+
+### 使用示例
+
+通过MCP协议调用视频生成功能：
+
+```javascript
+// 生成视频（文本生成）
+client.callTool({
+  name: "generateVideo",
+  arguments: {
+    prompt: "一只小狗在草地上奔跑，阳光明媚，高清",
+    model: "jimeng-video-3.0",
+    resolution: "720p",
+    width: 1024,
+    height: 1024
+  }
+});
+
+// 生成视频（首帧/尾帧定制）
+client.callTool({
+  name: "generateVideo",
+  arguments: {
+    prompt: "城市夜景延时摄影",
+    filePath: ["./first.png", "./last.png"],
+    resolution: "1080p"
+  }
+});
+```
+
+## 视频响应格式
+
+API将返回生成的视频URL字符串，可以直接在各类客户端中播放：
+
+```javascript
+"https://example.com/generated-video.mp4"
+``` 
+
+
+## 支持api服务启动
+
+如需以API服务方式启动（适合HTTP接口调用）：
+
+```bash
+cp .env.example .env   # 复制环境变量模板
+# 根据需要编辑.env，填写JIMENG_API_TOKEN等配置
+
+# 启动API服务
+yarn start:api
+```
+
+API服务启动后将监听配置端口，支持通过HTTP接口调用即梦AI图像和视频生成功能。 

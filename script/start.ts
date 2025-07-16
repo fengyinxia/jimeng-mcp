@@ -1,5 +1,5 @@
 import express from 'express'
-import { generateImage } from '../src/api'
+import { generateImage, generateVideo } from '../src/api'
 
 async function start() {
   const app = express();
@@ -10,6 +10,15 @@ async function start() {
   app.post('/generateImage', async (req, res) => {
     try {
       const result = await generateImage(req.body);
+      return res.json(result);
+    } catch (err) {
+      console.error('生成失败:', err);
+      return res.status(500).json({ error: '生成错误: ' + err });
+    }
+  });
+  app.post('/generateVideo', async (req, res) => {
+    try {
+      const result = await generateVideo(req.body);
       return res.json(result);
     } catch (err) {
       console.error('生成失败:', err);

@@ -1,10 +1,11 @@
 import axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 // @ts-ignore
 import crc32 from 'crc32';
+import { generate_a_bogus } from './utils/a_bogus.js';
+import { generateMsToken, toUrlParams, generateUuid, jsonEncode, urlEncode, unixTimestamp } from './utils/index.js';
 
 
 // 模型映射
@@ -16,33 +17,23 @@ const MODEL_MAP: Record<string, string> = {
   'jimeng-2.0': 'high_aes_general_v20:general_v2.0',
   'jimeng-1.4': 'high_aes_general_v14:general_v1.4',
   'jimeng-xl-pro': 'text2img_xl_sft',
+  // video
+  'jimeng-video-3.0-pro': 'dreamina_ic_generate_video_model_vgfm_3.0_pro',
+  'jimeng-video-3.0': 'dreamina_ic_generate_video_model_vgfm_3.0',
+  'jimeng-video-2.0': 'dreamina_ic_generate_video_model_vgfm_lite',
+  'jimeng-video-2.0-pro': 'dreamina_ic_generate_video_model_vgfm1.0'
 };
-
-// 工具函数
-const generateUuid = (): string => {
-  return uuidv4();
-};
-
-const jsonEncode = (obj: any): string => {
-  return JSON.stringify(obj);
-};
-
-const urlEncode = (str: string): string => {
-  return encodeURI(str);
-};
-
-const unixTimestamp = () => {
-  return parseInt(`${Date.now() / 1000}`);
-}
 
 
 // 常量定义
 const DEFAULT_MODEL = 'jimeng-3.1';
+const DEFAULT_VIDEO_MODEL = 'jimeng-video-3.0';
 const DEFAULT_BLEND_MODEL = 'jimeng-3.0';
 const DRAFT_VERSION = '3.0.2';
 const DEFAULT_ASSISTANT_ID = '513695'; // 从原始仓库中提取
 const WEB_ID = Math.random() * 999999999999999999 + 7000000000000000000;
 const USER_ID = generateUuid().replace(/-/g, '');
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 // 接口定义
 interface LogoInfo {
@@ -61,6 +52,17 @@ interface ImageGenerationParams {
   height?: number; // 图像高度，默认1024
   sample_strength?: number; // 精细度，默认0.5
   negative_prompt?: string; // 反向提示词，默认空
+  refresh_token?: string; // 刷新令牌，必需
+  req_key?: string; // 自定义参数，兼容旧接口
+}
+
+interface VideoGenerationParams {
+  filePath?: string[]; // 首帧和尾帧路径，支持数组
+  resolution?: string; // 分辨率 720p 1080p
+  model?: string; // 模型名称，默认使用 DEFAULT_MODEL
+  prompt: string; // 提示词
+  width?: number; // 图像宽度，默认1024
+  height?: number; // 图像高度，默认1024
   refresh_token?: string; // 刷新令牌，必需
   req_key?: string; // 自定义参数，兼容旧接口
 }
@@ -140,8 +142,7 @@ class JimengApiClient {
       "Sec-Fetch-Dest": "empty",
       "Sec-Fetch-Mode": "cors",
       "Sec-Fetch-Site": "same-origin",
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "User-Agent": UA
     };
     const requestHeaders = {
       ...FAKE_HEADERS,
@@ -199,13 +200,14 @@ class JimengApiClient {
    * 领取积分
    */
   public async receiveCredit(): Promise<void> {
-    await this.request(
+    const credit = await this.request(
       'POST',
       '/commerce/v1/benefits/credit_receive',
       { 'time_zone': 'Asia/Shanghai' },
       {},
       { 'Referer': 'https://jimeng.jianying.com/ai-tool/image/generate' }
     );
+    console.log("领取积分", credit)
   }
 
   /**
@@ -392,6 +394,20 @@ class JimengApiClient {
       rqData,
       rqParams
     );
+
+    const itemList = await this.pollResultWithHistory(result);
+
+    // 提取图片URL
+    const resultList = (itemList || []).map(item => {
+      const imageUrl = item?.image?.large_images?.[0]?.image_url || item?.common_attr?.cover_url;
+      return imageUrl;
+    }).filter(Boolean)
+    console.log('生成图片结果:', resultList)
+    return resultList
+  }
+
+
+  async pollResultWithHistory(result: any): Promise<any[]> {
     // 获取历史记录ID
     const historyId = result?.data?.aigc_data?.history_record_id;
     if (!historyId) {
@@ -408,7 +424,7 @@ class JimengApiClient {
     let itemList: any[] = [];
 
     while (status === 20) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       const result = await this.request(
         'POST',
@@ -444,24 +460,20 @@ class JimengApiClient {
       if (!record) {
         throw new Error('记录不存在');
       }
-
       status = record.status;
       failCode = record.fail_code;
-      itemList = record.item_list || [];
 
       if (status === 30) {
         if (failCode === '2038') {
           throw new Error('内容被过滤');
         }
-        throw new Error('图像生成失败');
+        throw new Error('生成失败');
+      }
+      if (record.item_list && record.item_list.length > 0) {
+        return record.item_list as any[];
       }
     }
-
-    // 提取图片URL
-    return itemList.map(item => {
-      const imageUrl = item?.image?.large_images?.[0]?.image_url || item?.common_attr?.cover_url;
-      return imageUrl;
-    }).filter(Boolean);
+    return []
   }
   /**
   * 获取上传凭证所需Ak和Tk
@@ -759,6 +771,7 @@ class JimengApiClient {
   ): Promise<string> {
     return new Promise(async (resolve, reject) => {
       try {
+        console.log('开始上传文件:', filePath);
         // 获取上传令牌所需Ak和Tk
         const uploadAuth = await this.getUploadAuth();
 
@@ -877,6 +890,163 @@ class JimengApiClient {
     });
   }
 
+  async generateVideo(params: VideoGenerationParams): Promise<string> {
+    if (!params.prompt || typeof params.prompt !== 'string') {
+      throw new Error('prompt必须是非空字符串');
+    }
+    const actualModel = this.getModel(params.model || DEFAULT_VIDEO_MODEL);
+    // 检查积分
+    const creditInfo = await this.getCredit();
+    if (creditInfo.totalCredit <= 0) {
+      await this.receiveCredit();
+    }
+    let first_frame_image = undefined
+    let end_frame_image = undefined
+    if (params?.filePath) {
+      let uploadIDs: any[] = []
+      for (const item of params.filePath) {
+        const uploadID = await this.uploadCoverFile(item)
+        uploadIDs.push(uploadID)
+      }
+      if (uploadIDs[0]) {
+        first_frame_image = {
+          format: "",
+          height: params.height || 1024,
+          id: generateUuid(),
+          image_uri: uploadIDs[0],
+          name: "",
+          platform_type: 1,
+          source_from: "upload",
+          type: "image",
+          uri: uploadIDs[0],
+          width: params.width || 1024,
+        }
+      }
+      if (uploadIDs[1]) {
+        end_frame_image = {
+          format: "",
+          height: params.height || 1024,
+          id: generateUuid(),
+          image_uri: uploadIDs[1],
+          name: "",
+          platform_type: 1,
+          source_from: "upload",
+          type: "image",
+          uri: uploadIDs[1],
+          width: params.width || 1024,
+        }
+      }
+      if (!first_frame_image && !end_frame_image) {
+        throw new Error('上传封面图片失败，请检查图片路径是否正确');
+      }
+    }
+    const componentId = generateUuid();
+    const metricsExtra = jsonEncode({
+      "enterFrom": "click",
+      "isDefaultSeed": 1,
+      "promptSource": "custom",
+      "isRegenerate": false,
+      "originSubmitId": generateUuid(),
+    })
+    const rqParams: {
+      [key: string]: string | number
+    } = {
+      msToken: generateMsToken(),
+      aigc_features: "app_lip_sync",
+      web_version: "6.6.0",
+      "da_version": "3.2.8",
+      "aid": parseInt(DEFAULT_ASSISTANT_ID),
+      "device_platform": "web",
+      "region": "CN",
+      "web_id": WEB_ID
+    }
+    rqParams['a_bogus'] = generate_a_bogus(toUrlParams(rqParams), UA)
+    const rqData = {
+      "extend": {
+        "root_model": end_frame_image ? MODEL_MAP['jimeng-video-3.0'] : actualModel,
+        "m_video_commerce_info": {
+          benefit_type: "basic_video_operation_vgfm_v_three",
+          resource_id: "generate_video",
+          resource_id_type: "str",
+          resource_sub_type: "aigc"
+        },
+        "m_video_commerce_info_list": [{
+          benefit_type: "basic_video_operation_vgfm_v_three",
+          resource_id: "generate_video",
+          resource_id_type: "str",
+          resource_sub_type: "aigc"
+        }]
+      },
+      "submit_id": generateUuid(),
+      "metrics_extra": metricsExtra,
+      "draft_content": jsonEncode({
+        "type": "draft",
+        "id": generateUuid(),
+        "min_version": "3.0.5",
+        "is_from_tsn": true,
+        "version": "3.2.8",
+        "main_component_id": componentId,
+        "component_list": [{
+          "type": "video_base_component",
+          "id": componentId,
+          "min_version": "1.0.0",
+          "metadata": {
+            "type": "",
+            "id": generateUuid(),
+            "created_platform": 3,
+            "created_platform_version": "",
+            "created_time_in_ms": Date.now(),
+            "created_did": ""
+          },
+          "generate_type": "gen_video",
+          "aigc_mode": "workbench",
+          "abilities": {
+            "type": "",
+            "id": generateUuid(),
+            "gen_video": {
+              "id": generateUuid(),
+              "type": "",
+              "text_to_video_params": {
+                "type": "",
+                "id": generateUuid(),
+                "model_req_key": actualModel,
+                "priority": 0,
+                "seed": Math.floor(Math.random() * 100000000) + 2500000000,
+                "video_aspect_ratio": "1:1",
+                "video_gen_inputs": [{
+                  duration_ms: 5000,
+                  first_frame_image: first_frame_image,
+                  end_frame_image: end_frame_image,
+                  fps: 24,
+                  id: generateUuid(),
+                  min_version: "3.0.5",
+                  prompt: params.prompt,
+                  resolution: params.resolution || "720p",
+                  type: "",
+                  video_mode: 2
+                }]
+              },
+              "video_task_extra": metricsExtra,
+            }
+          }
+        }],
+      }),
+    }
+    // 发送生成请求
+    const result = await this.request(
+      'POST',
+      '/mweb/v1/aigc_draft/generate',
+      rqData,
+      rqParams
+    );
+
+    const itemList = await this.pollResultWithHistory(result);
+    const videoUrl = itemList?.[0]?.video?.transcoded_video?.origin?.video_url
+    console.log('生成视频结果:', videoUrl);
+
+    return videoUrl;
+  }
+
 }
 
 // 创建API客户端实例
@@ -887,6 +1057,10 @@ const apiClient = new JimengApiClient();
 export const generateImage = (params: ImageGenerationParams): Promise<string[]> => {
   return apiClient.generateImage(params);
 };
+
+export const generateVideo = (params: VideoGenerationParams): Promise<string> => {
+  return apiClient.generateVideo(params)
+}
 
 // 导出接口定义，以便其他模块使用
 export type { ImageGenerationParams, LogoInfo };

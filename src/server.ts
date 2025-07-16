@@ -1,7 +1,7 @@
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { generateImage } from "./api.js";
+import { generateImage, generateVideo } from "./api.js";
 
 // 定义服务器返回类型接口
 export interface ServerInstance {
@@ -90,6 +90,50 @@ export const createServer = (): McpServer => {
     }
   );
 
+  // 添加即梦AI视频生成工具
+  server.tool(
+    "generateVideo",
+    {
+      filePath: z.array(z.string()).optional().describe("首帧和尾帧图片路径，支持数组，最多2个元素，分别为首帧和尾帧"),
+      resolution: z.string().optional().describe("分辨率，可选720p或1080p，默认720p"),
+      model: z.string().optional().describe("模型名称，默认jimeng-video-3.0"),
+      prompt: z.string().describe("生成视频的文本描述"),
+      width: z.number().optional().default(1024).describe("视频宽度，默认1024"),
+      height: z.number().optional().default(1024).describe("视频高度，默认1024"),
+      refresh_token: z.string().optional().describe("即梦API令牌（可选，通常从环境变量读取）"),
+      req_key: z.string().optional().describe("自定义参数，兼容旧接口")
+    },
+    async (params) => {
+      try {
+        const videoUrl = await generateVideo({
+          filePath: params.filePath,
+          resolution: params.resolution,
+          model: params.model,
+          prompt: params.prompt,
+          width: params.width,
+          height: params.height,
+          refresh_token: params.refresh_token,
+          req_key: params.req_key
+        });
+        if (!videoUrl) {
+          return {
+            content: [{ type: "text", text: "视频生成失败：未能获取视频URL" }],
+            isError: true
+          };
+        }
+        return {
+          content: [{ type: "text", text: videoUrl }]
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          content: [{ type: "text", text: `视频生成失败: ${errorMessage}` }],
+          isError: true
+        };
+      }
+    }
+  );
+
   // 添加一个问候资源
   server.resource(
     "greeting",
@@ -152,6 +196,45 @@ export const createServer = (): McpServer => {
             "height": 1024,
             "sample_strength": 0.7,
             "negative_prompt": "模糊，扭曲，低质量"
+          })
+        `
+      }]
+    })
+  );
+
+  // 添加即梦AI视频生成服务信息资源
+  server.resource(
+    "jimeng-ai-video",
+    "jimeng-ai-video://info",
+    async (uri) => ({
+      contents: [{
+        uri: uri.href,
+        text: `
+          即梦AI视频生成服务
+          -----------------
+          通过使用 generateVideo 工具提交视频生成请求
+
+          需要在环境变量中设置:
+          JIMENG_API_TOKEN - 即梦API令牌（从即梦网站获取的sessionid）
+
+          参数说明:
+          - filePath: 首帧和尾帧图片路径，支持数组，最多2个元素，分别为首帧和尾帧（可选）
+          - prompt: 生成视频的文本描述（必填）
+          - model: 模型名称，默认jimeng-video-3.0（可选）
+          - resolution: 分辨率，可选720p或1080p，默认720p（可选）
+          - width: 视频宽度，默认1024（可选）
+          - height: 视频高度，默认1024（可选）
+          - refresh_token: 即梦API令牌（可选，通常从环境变量读取）
+          - req_key: 自定义参数，兼容旧接口（可选）
+
+          示例:
+          generateVideo({
+            "filePath": ["./first.png", "./last.png"],
+            "prompt": "一只小狗在草地上奔跑，阳光明媚，高清",
+            "model": "jimeng-video-3.0",
+            "resolution": "720p",
+            "width": 1024,
+            "height": 1024
           })
         `
       }]
